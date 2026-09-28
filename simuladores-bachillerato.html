@@ -1,0 +1,639 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simuladores de Física</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 0; background-color: #f4f4f9; }
+        nav { background-color: #2c3e50; padding: 10px; display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; }
+        nav button { background-color: #34495e; color: white; border: none; padding: 10px 15px; font-size: 15px; cursor: pointer; border-radius: 5px; transition: background 0.3s; }
+        nav button:hover, nav button.active { background-color: #3498db; }
+        .container { max-width: 1200px; margin: 20px auto; padding: 20px; background: white; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); display: none; }
+        .container.active { display: flex; gap: 20px; flex-wrap: wrap; }
+        .controls { flex: 1; min-width: 320px; padding-right: 20px; border-right: 1px solid #eee; }
+        .canvas-container { flex: 2; display: flex; flex-direction: column; align-items: center; min-width: 300px;}
+        canvas { border: 1px solid #ccc; background-color: #fff; max-width: 100%; height: auto; border-radius: 4px; }
+        .control-group { margin-bottom: 15px; }
+        .control-group label { display: block; margin-bottom: 5px; font-weight: bold; font-size: 14px; }
+        .control-group input[type="range"] { width: 100%; }
+        .result-box { margin-top: 20px; padding: 15px; background: #e8f4f8; border-radius: 5px; border-left: 4px solid #3498db; font-family: monospace; font-size: 13px; line-height: 1.5;}
+        .btn-action { margin-top:10px; padding:6px 12px; cursor: pointer; border: 1px solid #ccc; border-radius: 4px; background: #fff;}
+        .btn-action:hover { background: #eee; }
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        @media (max-width: 768px) { .controls { border-right: none; border-bottom: 1px solid #eee; padding-bottom: 20px; } .grid-2 { grid-template-columns: 1fr; } }
+    </style>
+</head>
+<body>
+
+    <nav>
+        <button id="btn-campos" class="active" onclick="switchTab('campos')">Campos Vectoriales</button>
+        <button id="btn-gravitacion" onclick="switchTab('gravitacion')">Órbitas</button>
+        <button id="btn-kepler" onclick="switchTab('kepler')">Leyes de Kepler</button>
+        <button id="btn-ondas" onclick="switchTab('ondas')">Ondas Transversales</button>
+        <button id="btn-optica" onclick="switchTab('optica')">Óptica Geométrica</button>
+    </nav>
+
+    <!-- SIMULADOR 1: CAMPOS -->
+    <div id="sim-campos" class="container active">
+        <div class="controls">
+            <h3>Controles de Campo</h3>
+            <div class="control-group">
+                <label>Modo:</label>
+                <select id="campo-modo" onchange="updateCampos()">
+                    <option value="Electrico">Campo Eléctrico</option>
+                    <option value="Gravitatorio">Campo Gravitatorio</option>
+                </select>
+            </div>
+            <div class="control-group">
+                <label>Posición Observador X (m):</label>
+                <input type="number" id="campo-obs-x" value="0" step="0.5" onchange="updateCampos()">
+            </div>
+            <div class="control-group">
+                <label>Posición Observador Y (m):</label>
+                <input type="number" id="campo-obs-y" value="3" step="0.5" onchange="updateCampos()">
+            </div>
+            <hr>
+            <div id="fuentes-list"></div>
+            
+            <button class="btn-action" onclick="addFuente()">Añadir Genérica</button>
+            <div id="btn-particulas" style="display:inline-block;">
+                <button class="btn-action" style="color:red; border-color:red;" onclick="addParticula(1.602e-19)">+ Protón</button>
+                <button class="btn-action" style="color:blue; border-color:blue;" onclick="addParticula(-1.602e-19)">- Electrón</button>
+            </div>
+            
+            <div class="result-box" id="campo-resultados"></div>
+        </div>
+        <div class="canvas-container">
+            <canvas id="canvas-campos" width="600" height="600"></canvas>
+        </div>
+    </div>
+
+    <!-- SIMULADOR 2: GRAVITACIÓN (SELECTIVIDAD) -->
+    <div id="sim-gravitacion" class="container">
+        <div class="controls">
+            <h3>Parámetros del Sistema</h3>
+            <div class="control-group">
+                <label>Masa del Planeta M (×10²⁴ kg): <span id="val-grav-M">5.97</span></label>
+                <input type="range" id="grav-M" min="0.1" max="2000" step="0.1" value="5.97" oninput="updateGravInputs()">
+                <small style="color:#777;">Tierra = 5.97 | Júpiter = 1898</small>
+            </div>
+            <div class="control-group">
+                <label>Radio del Planeta R (km): <span id="val-grav-R">6371</span></label>
+                <input type="range" id="grav-R" min="1000" max="70000" step="10" value="6371" oninput="updateGravInputs()">
+            </div>
+            <hr>
+            <div class="control-group">
+                <label>Masa del Satélite m (kg): <span id="val-grav-m">400</span></label>
+                <input type="range" id="grav-m" min="10" max="5000" step="10" value="400" oninput="updateGravInputs()">
+            </div>
+            <div class="control-group">
+                <label>Altura orbital h (km): <span id="val-grav-h">400</span></label>
+                <input type="range" id="grav-h" min="100" max="40000" step="100" value="400" oninput="updateGravInputs()">
+                <small style="color:#777;">Geostacionaria ≈ 35786 km</small>
+            </div>
+            <div class="result-box" id="grav-resultados" style="max-height: 350px; overflow-y: auto;"></div>
+        </div>
+        <div class="canvas-container">
+            <canvas id="canvas-gravitacion" width="700" height="600"></canvas>
+        </div>
+    </div>
+
+    <!-- SIMULADOR 3: LEYES DE KEPLER -->
+    <div id="sim-kepler" class="container">
+        <div class="controls">
+            <h3>Parámetros de la Órbita</h3>
+            <div class="control-group">
+                <label>Semieje mayor a (Unidades relativas): <span id="val-kep-a">150</span></label>
+                <input type="range" id="kep-a" min="80" max="250" step="1" value="150" oninput="updateKeplerInputs()">
+            </div>
+            <div class="control-group">
+                <label>Excentricidad e: <span id="val-kep-e">0.60</span></label>
+                <input type="range" id="kep-e" min="0.0" max="0.85" step="0.01" value="0.60" oninput="updateKeplerInputs()">
+            </div>
+            <div class="result-box" id="kep-resultados"></div>
+        </div>
+        <div class="canvas-container">
+            <canvas id="canvas-kepler" width="700" height="600"></canvas>
+        </div>
+    </div>
+
+    <!-- SIMULADOR 4: ONDAS -->
+    <div id="sim-ondas" class="container">
+        <div class="controls">
+            <h3>Parámetros de la Onda</h3>
+            <div class="control-group">
+                <label>Amplitud (A): <span id="val-A">2.00</span> m</label>
+                <input type="range" id="onda-A" min="0.1" max="4.0" step="0.01" value="2.0" oninput="updateOndas()">
+            </div>
+            <div class="control-group">
+                <label>Nº de onda (k): <span id="val-k">6.28</span> rad/m</label>
+                <input type="range" id="onda-k" min="0.1" max="12.56" step="0.01" value="6.28" oninput="updateOndas()">
+            </div>
+            <div class="control-group">
+                <label>Frecuencia angular (ω): <span id="val-omega">3.14</span> rad/s</label>
+                <input type="range" id="onda-omega" min="0.0" max="12.56" step="0.01" value="3.14" oninput="updateOndas()">
+            </div>
+            <div class="control-group">
+                <label>Fase inicial (φ₀): <span id="val-phi">0.00</span> rad</label>
+                <input type="range" id="onda-phi" min="-3.1415" max="3.1415" step="0.01" value="0.0" oninput="updateOndas()">
+            </div>
+            <div class="control-group">
+                <label>Tiempo (t): <span id="val-t">0.00</span> s</label>
+                <input type="range" id="onda-t" min="0.0" max="10.0" step="0.01" value="0.0" oninput="updateOndas()">
+            </div>
+            <button class="btn-action" onclick="resetOndas()">Reset</button>
+            
+            <div class="result-box" id="onda-resultados"></div>
+        </div>
+        <div class="canvas-container">
+            <canvas id="canvas-ondas" width="800" height="500"></canvas>
+        </div>
+    </div>
+
+    <!-- SIMULADOR 5: ÓPTICA -->
+    <div id="sim-optica" class="container">
+        <div class="controls">
+            <h3>Parámetros DIN</h3>
+            <div class="control-group">
+                <label>Distancia Focal f' (cm): <span id="val-f">15.0</span></label>
+                <input type="range" id="opt-f" min="-40" max="40" step="1" value="15" oninput="updateOptica()">
+            </div>
+            <div class="control-group">
+                <label>Posición del Objeto s (cm): <span id="val-s">-30.0</span></label>
+                <input type="range" id="opt-s" min="-60" max="-2" step="1" value="-30" oninput="updateOptica()">
+            </div>
+            <div class="control-group">
+                <label>Altura del Objeto y (cm): <span id="val-y">5.0</span></label>
+                <input type="range" id="opt-y" min="1" max="20" step="0.5" value="5" oninput="updateOptica()">
+            </div>
+            <div class="result-box" id="opt-resultados"></div>
+        </div>
+        <div class="canvas-container">
+            <canvas id="canvas-optica" width="800" height="500"></canvas>
+        </div>
+    </div>
+
+    <script>
+        let currentTab = 'campos';
+        let ind_time = 0;
+        let grav_angle = 0; 
+        let kepler_angle = 0; 
+        const G_CTE = 6.674e-11;
+
+        function drawArrow(ctx, fromX, fromY, toX, toY, color, dotted=false, lineWidth=2, headlen=12) {
+            const dx = toX - fromX;
+            const dy = toY - fromY;
+            const angle = Math.atan2(dy, dx);
+            
+            ctx.beginPath();
+            if(dotted) ctx.setLineDash([5, 5]);
+            else ctx.setLineDash([]);
+            ctx.moveTo(fromX, fromY);
+            ctx.lineTo(toX, toY);
+            ctx.strokeStyle = color;
+            ctx.lineWidth = lineWidth;
+            ctx.stroke();
+            ctx.setLineDash([]);
+            
+            ctx.beginPath();
+            ctx.moveTo(toX, toY);
+            ctx.lineTo(toX - headlen * Math.cos(angle - Math.PI / 6), toY - headlen * Math.sin(angle - Math.PI / 6));
+            ctx.lineTo(toX - headlen * Math.cos(angle + Math.PI / 6), toY - headlen * Math.sin(angle + Math.PI / 6));
+            ctx.lineTo(toX, toY);
+            ctx.fillStyle = color;
+            ctx.fill();
+        }
+
+        function switchTab(tabId) {
+            document.querySelectorAll('.container').forEach(c => c.classList.remove('active'));
+            document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
+            document.getElementById('sim-' + tabId).classList.add('active');
+            document.getElementById('btn-' + tabId).classList.add('active');
+            currentTab = tabId;
+
+            if(tabId === 'campos') updateCampos();
+            if(tabId === 'ondas') updateOndas();
+            if(tabId === 'optica') updateOptica();
+            if(tabId === 'gravitacion') { grav_angle = 0; updateGravInputs(); }
+            if(tabId === 'kepler') { kepler_angle = 0; updateKeplerInputs(); }
+        }
+
+        // --- SIMULADOR 1: CAMPOS ---
+        let fuentes = [{ x: -2.0, y: 0.0, val: 1e-6 }, { x: 2.0, y: 0.0, val: -1e-6 }];
+        function renderFuentesList() {
+            const list = document.getElementById('fuentes-list');
+            list.innerHTML = '';
+            fuentes.forEach((f, i) => {
+                list.innerHTML += `<div style="margin-bottom:8px; font-size:12px;">
+                    <b>F${i+1}</b> - X: <input type="number" value="${f.x}" step="0.5" style="width:45px" onchange="fuentes[${i}].x=parseFloat(this.value); updateCampos()">
+                    Y: <input type="number" value="${f.y}" step="0.5" style="width:45px" onchange="fuentes[${i}].y=parseFloat(this.value); updateCampos()">
+                    Valor: <input type="number" value="${f.val}" step="any" style="width:75px" onchange="fuentes[${i}].val=parseFloat(this.value); updateCampos()">
+                    <button onclick="fuentes.splice(${i},1); updateCampos()" style="color:red; cursor:pointer;"><b>X</b></button>
+                </div>`;
+            });
+        }
+        function addFuente() { fuentes.push({ x: (Math.random()*4-2).toFixed(1), y: (Math.random()*4-2).toFixed(1), val: fuentes.length % 2 === 0 ? 1e-6 : -1e-6 }); updateCampos(); }
+        function addParticula(carga) { fuentes.push({ x: (Math.random()*4-2).toFixed(1), y: (Math.random()*4-2).toFixed(1), val: carga }); updateCampos(); }
+        function updateCampos() {
+            const modo = document.getElementById('campo-modo').value;
+            document.getElementById('btn-particulas').style.display = modo === 'Electrico' ? 'inline-block' : 'none';
+            renderFuentesList();
+            const canvas = document.getElementById('canvas-campos');
+            const ctx = canvas.getContext('2d');
+            const px = parseFloat(document.getElementById('campo-obs-x').value);
+            const py = parseFloat(document.getElementById('campo-obs-y').value);
+            const scale = canvas.width / 12;
+            const toX = x => canvas.width/2 + x * scale;
+            const toY = y => canvas.height/2 - y * scale;
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.beginPath(); ctx.moveTo(0, canvas.height/2); ctx.lineTo(canvas.width, canvas.height/2);
+            ctx.moveTo(canvas.width/2, 0); ctx.lineTo(canvas.width/2, canvas.height);
+            ctx.strokeStyle = '#ddd'; ctx.lineWidth = 1; ctx.stroke();
+
+            let Ex = 0, Ey = 0, V = 0; let vectores_ind = [];
+            fuentes.forEach((f, i) => {
+                const rx = px - f.x, ry = py - f.y, r = Math.sqrt(rx*rx + ry*ry);
+                if(r > 0) {
+                    let mod_v = modo === 'Electrico' ? 9e9 * f.val / (r*r) : -G_CTE * Math.abs(f.val) / (r*r);
+                    V += modo === 'Electrico' ? 9e9 * f.val / r : -G_CTE * Math.abs(f.val) / r;
+                    Ex += mod_v * (rx/r); Ey += mod_v * (ry/r);
+                    vectores_ind.push({ vx: mod_v * (rx/r), vy: mod_v * (ry/r) });
+                }
+                ctx.beginPath(); ctx.arc(toX(f.x), toY(f.y), 10, 0, 2*Math.PI);
+                ctx.fillStyle = modo === 'Electrico' ? (f.val > 0 ? '#e74c3c' : '#3498db') : '#2ecc71'; ctx.fill();
+                ctx.fillStyle = 'white'; ctx.font = "bold 12px Arial";
+                ctx.fillText((f.val > 0 && modo === 'Electrico' ? "+" : (f.val < 0 && modo === 'Electrico' ? "-" : "")), toX(f.x)-4, toY(f.y)+4);
+            });
+
+            let mag = Math.sqrt(Ex*Ex + Ey*Ey);
+            if (mag > 0) {
+                let max_v = mag;
+                vectores_ind.forEach(v => { let vmag = Math.sqrt(v.vx*v.vx + v.vy*v.vy); if(vmag > max_v) max_v = vmag; });
+                let scaleF = max_v > 0 ? (2.5 / max_v) : 0;
+                vectores_ind.forEach(v => drawArrow(ctx, toX(px), toY(py), toX(px + v.vx * scaleF), toY(py + v.vy * scaleF), 'rgba(150, 150, 150, 0.7)', true, 2, 8));
+                drawArrow(ctx, toX(px), toY(py), toX(px + Ex * scaleF), toY(py + Ey * scaleF), '#8e44ad', false, 3.5, 14);
+            }
+            ctx.fillStyle = '#2c3e50'; ctx.beginPath(); ctx.arc(toX(px), toY(py), 5, 0, 2*Math.PI); ctx.fill();
+
+            let uni_c = modo === 'Electrico' ? 'N/C' : 'm/s²';
+            let uni_v = modo === 'Electrico' ? 'V' : 'J/kg';
+            let simbolo = modo === 'Electrico' ? 'E' : 'g';
+
+            document.getElementById('campo-resultados').innerHTML = 
+                `<strong>Resultados en P(${px}, ${py}):</strong><br><br>` +
+                `<strong>Vector:</strong><br> ` +
+                `&nbsp;&nbsp;<span style="font-size:16px;"><b>${simbolo}</b> = (${Ex.toExponential(2)}) <b>î</b> + (${Ey.toExponential(2)}) <b>ĵ</b> ${uni_c}</span><br><br>` +
+                `<strong>Módulo:</strong> |<b>${simbolo}</b>| = ${mag.toExponential(2)} ${uni_c}<br>` +
+                `<strong>Potencial:</strong> V = ${V.toExponential(2)} ${uni_v}`;
+        }
+
+        // --- SIMULADOR 2: GRAVITACIÓN (SELECTIVIDAD) ---
+        function updateGravInputs() {
+            document.getElementById('val-grav-M').innerText = document.getElementById('grav-M').value;
+            document.getElementById('val-grav-R').innerText = document.getElementById('grav-R').value;
+            document.getElementById('val-grav-m').innerText = document.getElementById('grav-m').value;
+            document.getElementById('val-grav-h').innerText = document.getElementById('grav-h').value;
+        }
+
+        function formatScientific(num) {
+            if (num === 0) return "0";
+            let exponent = Math.floor(Math.log10(Math.abs(num)));
+            let mantissa = num / Math.pow(10, exponent);
+            return `${mantissa.toFixed(2)} × 10<sup>${exponent}</sup>`;
+        }
+
+        function renderGravitacion() {
+            const canvas = document.getElementById('canvas-gravitacion');
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            const M = parseFloat(document.getElementById('grav-M').value) * 1e24; 
+            const R = parseFloat(document.getElementById('grav-R').value) * 1000; 
+            const m = parseFloat(document.getElementById('grav-m').value); 
+            const h = parseFloat(document.getElementById('grav-h').value) * 1000; 
+            const r = R + h; 
+
+            const g0 = (G_CTE * M) / (R * R);
+            const g_orb = (G_CTE * M) / (r * r);
+            const v_orb = Math.sqrt((G_CTE * M) / r);
+            const v_esc = Math.sqrt((2 * G_CTE * M) / R);
+            const T = 2 * Math.PI * Math.sqrt(Math.pow(r, 3) / (G_CTE * M));
+            
+            const Ep = -(G_CTE * M * m) / r;
+            const Ec = 0.5 * m * v_orb * v_orb;
+            const Em = Ep + Ec;
+
+            document.getElementById('grav-resultados').innerHTML = `
+                <div style="color:#2c3e50; font-weight:bold; margin-bottom:8px;">CINEMÁTICA Y DINÁMICA</div>
+                <div class="grid-2">
+                    <div><b>g₀ (superficie):</b> ${g0.toFixed(2)} m/s²</div>
+                    <div><b>g (en órbita):</b> ${g_orb.toFixed(2)} m/s²</div>
+                    <div><b>v<sub>órbita</sub>:</b> ${(v_orb/1000).toFixed(2)} km/s</div>
+                    <div><b>v<sub>escape</sub>:</b> ${(v_esc/1000).toFixed(2)} km/s</div>
+                </div>
+                <div style="margin-top:8px;"><b>Periodo (T):</b> ${(T/3600).toFixed(2)} h  (${T.toFixed(0)} s)</div>
+                <hr style="border:0.5px solid #bdc3c7; margin: 10px 0;">
+                <div style="color:#2c3e50; font-weight:bold; margin-bottom:8px;">ENERGÍAS DEL SATÉLITE</div>
+                <b>E. Potencial (E<sub>p</sub>):</b> ${formatScientific(Ep)} J<br>
+                <b>E. Cinética (E<sub>c</sub>):</b> ${formatScientific(Ec)} J<br>
+                <b>E. Mecánica (E<sub>m</sub>):</b> <span style="color:#c0392b; font-weight:bold;">${formatScientific(Em)} J</span>
+            `;
+
+            const cx = canvas.width / 2;
+            const cy = canvas.height / 2;
+            const max_radius_pixels = Math.min(canvas.width, canvas.height) / 2 - 40; 
+            const scale = max_radius_pixels / r;
+            const R_px = R * scale;
+            const r_px = r * scale;
+
+            ctx.beginPath();
+            ctx.arc(cx, cy, R_px, 0, 2*Math.PI);
+            ctx.fillStyle = '#3498db'; 
+            ctx.fill();
+            ctx.lineWidth = 2;
+            ctx.strokeStyle = '#2980b9';
+            ctx.stroke();
+
+            const grad = ctx.createRadialGradient(cx - R_px*0.3, cy - R_px*0.3, R_px*0.1, cx, cy, R_px);
+            grad.addColorStop(0, 'rgba(255,255,255,0.3)');
+            grad.addColorStop(1, 'rgba(0,0,0,0.4)');
+            ctx.fillStyle = grad;
+            ctx.beginPath(); ctx.arc(cx, cy, R_px, 0, 2*Math.PI); ctx.fill();
+
+            ctx.fillStyle = 'white'; ctx.font = "bold 14px Arial"; ctx.textAlign = "center";
+            ctx.fillText("M", cx, cy + 5);
+            
+            ctx.beginPath();
+            ctx.arc(cx, cy, r_px, 0, 2*Math.PI);
+            ctx.strokeStyle = '#7f8c8d';
+            ctx.setLineDash([5, 5]);
+            ctx.lineWidth = 1.5;
+            ctx.stroke();
+            ctx.setLineDash([]);
+
+            const sat_x = cx + r_px * Math.cos(grav_angle);
+            const sat_y = cy + r_px * Math.sin(grav_angle);
+
+            ctx.beginPath();
+            ctx.arc(sat_x, sat_y, 8, 0, 2*Math.PI);
+            ctx.fillStyle = '#f1c40f'; 
+            ctx.fill();
+            ctx.strokeStyle = '#d35400';
+            ctx.stroke();
+            ctx.fillStyle = '#333'; ctx.font = "12px Arial"; ctx.fillText("m", sat_x, sat_y - 12);
+
+            const vec_len = 45; 
+            const fx = cx - sat_x; const fy = cy - sat_y;
+            const f_mag = Math.sqrt(fx*fx + fy*fy);
+            const f_normX = fx / f_mag; const f_normY = fy / f_mag;
+            drawArrow(ctx, sat_x, sat_y, sat_x + f_normX * vec_len, sat_y + f_normY * vec_len, '#e74c3c', false, 3, 10);
+            ctx.fillStyle = '#e74c3c'; ctx.fillText("Fg", sat_x + f_normX * vec_len*1.2, sat_y + f_normY * vec_len*1.2);
+
+            const v_normX = -Math.sin(grav_angle);
+            const v_normY = Math.cos(grav_angle);
+            drawArrow(ctx, sat_x, sat_y, sat_x + v_normX * vec_len, sat_y + v_normY * vec_len, '#2ecc71', false, 3, 10);
+            ctx.fillStyle = '#27ae60'; ctx.fillText("v", sat_x + v_normX * vec_len*1.2, sat_y + v_normY * vec_len*1.2);
+        }
+
+        // --- SIMULADOR 3: LEYES DE KEPLER ---
+        function updateKeplerInputs() {
+            document.getElementById('val-kep-a').innerText = document.getElementById('kep-a').value;
+            document.getElementById('val-kep-e').innerText = document.getElementById('kep-e').value;
+        }
+
+        function renderKepler() {
+            const canvas = document.getElementById('canvas-kepler');
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            const a = parseFloat(document.getElementById('kep-a').value);
+            const e = parseFloat(document.getElementById('kep-e').value);
+
+            const cx = canvas.width / 2; // Foco de la elipse (Planeta)
+            const cy = canvas.height / 2;
+
+            const p = a * (1 - e * e);
+            const r = p / (1 + e * Math.cos(kepler_angle));
+            const c = a * e;
+            const b = a * Math.sqrt(1 - e * e);
+            const center_x = cx - c; // Centro geométrico de la elipse
+            
+            // Textos informativos de a y e en la esquina del canvas
+            ctx.textAlign = "left";
+            ctx.fillStyle = '#2c3e50';
+            ctx.font = "bold 16px Arial";
+            ctx.fillText(`a = ${a.toFixed(0)} (Semieje mayor)`, 20, 30);
+            ctx.fillText(`e = ${e.toFixed(2)} (Excentricidad)`, 20, 55);
+
+            // Dibujar elipse orbital
+            ctx.beginPath();
+            ctx.ellipse(center_x, cy, a, b, 0, 0, 2 * Math.PI);
+            ctx.strokeStyle = '#7f8c8d';
+            ctx.setLineDash([5, 5]);
+            ctx.stroke();
+            ctx.setLineDash([]);
+
+            // ================= ETIQUETAS DE LOS EJES GEOMÉTRICOS =================
+            ctx.textAlign = "center";
+            ctx.font = "14px Arial";
+
+            // 1. Centro
+            ctx.beginPath();
+            ctx.arc(center_x, cy, 3, 0, 2*Math.PI);
+            ctx.fillStyle = '#7f8c8d';
+            ctx.fill();
+            ctx.fillText("C", center_x, cy + 18);
+
+            // 2. Semieje mayor (a)
+            ctx.beginPath();
+            ctx.moveTo(center_x, cy);
+            ctx.lineTo(center_x - a, cy); // Dibujado hacia el apoastro
+            ctx.strokeStyle = '#8e44ad';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            ctx.fillStyle = '#8e44ad';
+            ctx.fillText("a (Semieje mayor)", center_x - a/2, cy - 8);
+
+            // 3. Semieje menor (b)
+            ctx.beginPath();
+            ctx.moveTo(center_x, cy);
+            ctx.lineTo(center_x, cy - b);
+            ctx.strokeStyle = '#2980b9';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            ctx.fillStyle = '#2980b9';
+            ctx.fillText("b", center_x - 12, cy - b/2);
+
+            // 4. Distancia focal (c = a * e) para mostrar cómo funciona e
+            ctx.beginPath();
+            ctx.moveTo(center_x, cy);
+            ctx.lineTo(cx, cy); // Hacia el planeta
+            ctx.strokeStyle = '#d35400';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            ctx.fillStyle = '#d35400';
+            ctx.fillText("c = a·e", center_x + c/2, cy - 8);
+            // =======================================================================
+
+            // Dibujar Planeta (Foco)
+            ctx.beginPath();
+            ctx.arc(cx, cy, 15, 0, 2*Math.PI);
+            ctx.fillStyle = '#e67e22'; 
+            ctx.fill();
+            ctx.strokeStyle = '#d35400';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+
+            // Dibujar Satélite
+            const sat_x = cx + r * Math.cos(kepler_angle);
+            const sat_y = cy + r * Math.sin(kepler_angle);
+
+            // Vector de barrido de área (2ª Ley)
+            ctx.beginPath();
+            ctx.moveTo(cx, cy);
+            ctx.lineTo(sat_x, sat_y);
+            ctx.strokeStyle = 'rgba(230, 126, 34, 0.4)';
+            ctx.lineWidth = 3;
+            ctx.stroke();
+
+            ctx.beginPath();
+            ctx.arc(sat_x, sat_y, 8, 0, 2*Math.PI);
+            ctx.fillStyle = '#3498db'; 
+            ctx.fill();
+            ctx.strokeStyle = '#2980b9';
+            ctx.lineWidth = 1;
+            ctx.stroke();
+
+            // Vector Velocidad basado en hodógrafa de Kepler
+            const v_scale = 35;
+            const vx = -Math.sin(kepler_angle);
+            const vy = e + Math.cos(kepler_angle);
+            const v_mag = Math.sqrt(vx*vx + vy*vy);
+
+            drawArrow(ctx, sat_x, sat_y, sat_x + vx * v_scale, sat_y + vy * v_scale, '#2ecc71', false, 3, 10);
+            
+            const r_peri = a * (1 - e);
+            const r_apo = a * (1 + e);
+
+            document.getElementById('kep-resultados').innerHTML = `
+                <div style="color:#2c3e50; font-weight:bold; margin-bottom:8px;">ANÁLISIS ORBITAL</div>
+                <b>Distancia actual (r):</b> ${r.toFixed(1)} ud<br>
+                <b>Velocidad relativa (v):</b> ${v_mag.toFixed(2)} ud/s<br>
+                <hr style="border:0.5px solid #bdc3c7; margin: 10px 0;">
+                <b>Periastro (r min):</b> <span style="color:#c0392b">${r_peri.toFixed(1)} ud</span><br>
+                <b>Apoastro (r max):</b> <span style="color:#2980b9">${r_apo.toFixed(1)} ud</span><br>
+                <hr style="border:0.5px solid #bdc3c7; margin: 10px 0;">
+                <i style="color:#7f8c8d; font-size:12px;">La línea naranja barre áreas iguales en tiempos iguales.<br>El vector verde muestra cómo la velocidad orbital aumenta drásticamente cerca del planeta.</i>
+            `;
+
+            // Aumento del ángulo dinámico dependiendo de 1/r^2 (Momento Angular Constante)
+            const base_speed = 600; 
+            kepler_angle += base_speed / (r * r);
+            if(kepler_angle > 2 * Math.PI) kepler_angle -= 2 * Math.PI;
+        }
+
+        // --- SIMULADOR 4: ONDAS ---
+        function updateOndas() {
+            const A = parseFloat(document.getElementById('onda-A').value), k = parseFloat(document.getElementById('onda-k').value);
+            const omega = parseFloat(document.getElementById('onda-omega').value), phi = parseFloat(document.getElementById('onda-phi').value);
+            const t = parseFloat(document.getElementById('onda-t').value);
+            document.getElementById('val-A').innerText = A.toFixed(2); document.getElementById('val-k').innerText = k.toFixed(2);
+            document.getElementById('val-omega').innerText = omega.toFixed(2); document.getElementById('val-phi').innerText = phi.toFixed(2);
+            document.getElementById('val-t').innerText = t.toFixed(2);
+
+            const canvas = document.getElementById('canvas-ondas'), ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            const scaleX = canvas.width / 10, scaleY = canvas.height / 10, originY = canvas.height / 2;
+
+            ctx.beginPath(); ctx.moveTo(0, originY); ctx.lineTo(canvas.width, originY);
+            ctx.strokeStyle = '#aaa'; ctx.setLineDash([5, 5]); ctx.stroke(); ctx.setLineDash([]);
+
+            ctx.beginPath(); ctx.strokeStyle = '#2980b9'; ctx.lineWidth = 3;
+            for(let px = 0; px <= canvas.width; px++) {
+                let py = originY - (A * Math.cos(k * (px / scaleX) - omega * t + phi)) * scaleY;
+                if(px === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+            }
+            ctx.stroke();
+            let phiStr = phi > 0 ? ` + ${phi.toFixed(2)}` : (phi < 0 ? ` - ${Math.abs(phi).toFixed(2)}` : "");
+            document.getElementById('onda-resultados').innerHTML = `<strong>Ecuación de la onda actual:</strong><br><br><div style="font-size:16px; text-align:center; padding:10px; background:white; border-radius:4px; border:1px solid #b3d4fc;"><b>y(x,t) = ${A.toFixed(2)} · cos(${k.toFixed(2)}x - ${omega.toFixed(2)}t${phiStr})</b> m</div>`;
+        }
+        function resetOndas() { document.getElementById('onda-A').value = 2.0; document.getElementById('onda-k').value = 6.28; document.getElementById('onda-omega').value = 3.14; document.getElementById('onda-phi').value = 0.0; document.getElementById('onda-t').value = 0.0; updateOndas(); }
+
+        // --- SIMULADOR 5: ÓPTICA ---
+        function updateOptica() {
+            let f_prime = parseFloat(document.getElementById('opt-f').value);
+            const s = parseFloat(document.getElementById('opt-s').value), y = parseFloat(document.getElementById('opt-y').value);
+            if(Math.abs(f_prime) < 1) f_prime = f_prime >= 0 ? 1 : -1;
+            const f = -f_prime;
+            document.getElementById('val-f').innerText = f_prime.toFixed(1) + (f_prime > 0 ? " (Conv.)" : " (Div.)");
+            document.getElementById('val-s').innerText = s.toFixed(1); document.getElementById('val-y').innerText = y.toFixed(1);
+
+            let s_prime, y_prime, AL, textNature;
+            if (Math.abs(s - f) < 0.1) { s_prime = Infinity; AL = Infinity; y_prime = Infinity; textNature = "Los rayos emergen paralelos.<br>No se forma imagen."; } 
+            else {
+                s_prime = (f_prime * s) / (s + f_prime); AL = s_prime / s; y_prime = AL * y;
+                let tipo = s_prime > 0 ? "Real" : "Virtual", orientacion = y_prime > 0 ? "Derecha" : "Invertida";
+                let tamano = Math.abs(AL) > 1 ? "Mayor" : (Math.abs(AL) < 1 ? "Menor" : "Igual");
+                textNature = `Imagen: ${tipo}<br>${orientacion}, ${tamano}`;
+            }
+
+            document.getElementById('opt-resultados').innerHTML = `s' = ${s_prime === Infinity ? '∞' : s_prime.toFixed(2) + ' cm'}<br>y' = ${y_prime === Infinity ? '∞' : y_prime.toFixed(2) + ' cm'}<br>A_L = ${AL === Infinity ? '∞' : AL.toFixed(2) + 'X'}<br><br><span style="color:purple; font-style:italic; font-size: 16px; font-weight: bold;">${textNature}</span>`;
+
+            const canvas = document.getElementById('canvas-optica'), ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            const toX = val => canvas.width/2 + val * (canvas.width/160), toY = val => canvas.height/2 - val * (canvas.height/70);
+
+            ctx.beginPath(); ctx.moveTo(0, canvas.height/2); ctx.lineTo(canvas.width, canvas.height/2); ctx.strokeStyle = '#666'; ctx.lineWidth = 1.5; ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(toX(0), toY(35)); ctx.lineTo(toX(0), toY(-35)); ctx.strokeStyle = 'rgba(52, 152, 219, 0.4)'; ctx.lineWidth = 8; ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(toX(0), toY(35)); ctx.lineTo(toX(0), toY(-35)); ctx.strokeStyle = '#2c3e50'; ctx.lineWidth = 2; ctx.stroke();
+
+            ctx.fillStyle = '#e74c3c'; ctx.font = "bold 18px Arial";
+            ctx.beginPath(); ctx.arc(toX(f_prime), toY(0), 6, 0, 2*Math.PI); ctx.fill(); ctx.fillText("F'", toX(f_prime)-8, toY(-3));
+            ctx.beginPath(); ctx.arc(toX(f), toY(0), 6, 0, 2*Math.PI); ctx.fill(); ctx.fillText("F", toX(f)-6, toY(-3));
+
+            drawArrow(ctx, toX(s), toY(0), toX(s), toY(y), '#27ae60', false, 4, 12);
+            if(s_prime !== Infinity) {
+                drawArrow(ctx, toX(s_prime), toY(0), toX(s_prime), toY(y_prime), '#8e44ad', s_prime < 0, 4, 12);
+                ctx.beginPath(); ctx.moveTo(toX(s), toY(y)); ctx.lineTo(toX(0), toY(y)); ctx.strokeStyle = '#2980b9'; ctx.lineWidth = 2.5; ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(toX(0), toY(y)); ctx.lineTo(toX(80), toY(y + (-y / f_prime) * 80)); ctx.stroke();
+                if (s_prime < 0) { ctx.beginPath(); ctx.setLineDash([6,6]); ctx.moveTo(toX(0), toY(y)); ctx.lineTo(toX(s_prime), toY(y_prime)); ctx.stroke(); ctx.setLineDash([]); }
+                ctx.beginPath(); ctx.moveTo(toX(s), toY(y)); ctx.lineTo(toX(80), toY(y * (80/s))); ctx.strokeStyle = '#d35400'; ctx.stroke();
+                if (s_prime < 0) { ctx.beginPath(); ctx.setLineDash([6,6]); ctx.moveTo(toX(0), toY(0)); ctx.lineTo(toX(s_prime), toY(y_prime)); ctx.stroke(); ctx.setLineDash([]); }
+            }
+        }
+
+        // Bucle global de animación
+        function animate() {
+            if (currentTab === 'gravitacion') { 
+                const M = parseFloat(document.getElementById('grav-M').value) * 1e24;
+                const R = parseFloat(document.getElementById('grav-R').value) * 1000;
+                const h = parseFloat(document.getElementById('grav-h').value) * 1000;
+                const r = R + h;
+                
+                // Normalización de la velocidad orbital visual
+                // w_real es la frecuencia angular teórica
+                const w_real = Math.sqrt((G_CTE * M) / Math.pow(r, 3));
+                
+                // w0 es la frecuencia angular de referencia (Tierra + Satélite a 400km)
+                const w0 = Math.sqrt((G_CTE * 5.97e24) / Math.pow(6371000 + 400000, 3));
+                
+                // Ajustamos a una velocidad visual cómoda base (ej: 0.015 rad/frame)
+                const base_visual = 0.015;
+                const w_visual = base_visual * (w_real / w0);
+                
+                grav_angle += w_visual;
+                renderGravitacion(); 
+            }
+            if (currentTab === 'kepler') {
+                renderKepler();
+            }
+            requestAnimationFrame(animate);
+        }
+
+        updateCampos();
+        animate(); 
+    </script>
+</body>
+</html>

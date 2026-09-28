@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simulador de Sistemas de Lentes Delgadas</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 0; background-color: #f4f4f9; }
+        nav { background-color: #2c3e50; padding: 10px; display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; }
+        nav .navbar-title { color: white; font-size: 18px; font-weight: bold; margin-right: 20px; align-self: center;}
+        .container { max-width: 1300px; margin: 20px auto; padding: 20px; background: white; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); display: flex; gap: 20px; flex-wrap: wrap; }
+        .controls { flex: 1; min-width: 350px; padding-right: 20px; border-right: 1px solid #eee; height: 80vh; overflow-y: auto; }
+        .canvas-container { flex: 2; display: flex; flex-direction: column; align-items: center; min-width: 400px; }
+        canvas { border: 1px solid #ccc; background-color: #fff; max-width: 100%; height: auto; border-radius: 4px; cursor: crosshair; }
+        .control-group { margin-bottom: 12px; padding: 10px; background: #f9f9fc; border-radius: 5px; border: 1px solid #e0e0e0; }
+        .control-group label { display: block; margin-bottom: 5px; font-weight: bold; font-size: 13px; color: #333; }
+        .control-group select, .control-group input[type="number"], .control-group input[type="range"] { width: 100%; padding: 5px; box-sizing: border-box; font-family: inherit; }
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        .result-box { margin-top: 20px; padding: 15px; background: #e8f4f8; border-radius: 5px; border-left: 4px solid #3498db; font-family: monospace; font-size: 13px; line-height: 1.6; color: #2c3e50; }
+        .btn-action { margin-top: 5px; padding: 8px 12px; cursor: pointer; border: 1px solid #3498db; border-radius: 4px; background: #3498db; color: white; font-weight: bold; width: 100%; transition: 0.2s;}
+        .btn-action:hover { background: #2980b9; }
+        .btn-remove { background: #e74c3c; border-color: #c0392b; width: auto; padding: 4px 8px; font-size: 12px; float: right; margin-top: -25px;}
+        .btn-remove:hover { background: #c0392b; }
+        .lens-card { background: #fff; border: 1px solid #bdc3c7; border-left: 5px solid #9b59b6; padding: 10px; margin-bottom: 10px; border-radius: 4px; position: relative; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+        .lens-card h4 { margin: 0 0 10px 0; }
+        h3 { color: #2c3e50; border-bottom: 2px solid #ecf0f1; padding-bottom: 5px; margin-top: 0; }
+        
+        .coord-display { font-family: monospace; font-size: 14px; color: #555; text-align: center; margin-top: 10px; }
+        
+        @media (max-width: 768px) { .controls { border-right: none; border-bottom: 1px solid #eee; height: auto; } }
+    </style>
+</head>
+<body>
+
+    <nav>
+        <div class="navbar-title">⚙️ Óptica Geométrica Avanzada (Sistemas Múltiples)</div>
+    </nav>
+
+    <div class="container active">
+        <div class="controls">
+            <!-- SECCIÓN 0: PREAJUSTES -->
+            <div class="control-group" style="background: #e8f4f8; border-color: #3498db;">
+                <label style="color: #2980b9;">Sistemas Predefinidos:</label>
+                <select id="preset-system" onchange="loadPreset()">
+                    <option value="manual">Personalizado (Manual)</option>
+                    <option value="lupa">Lupa (Lente Simple)</option>
+                    <option value="microscopio">Microscopio Compuesto</option>
+                    <option value="astronomico">Telescopio Astronómico (Kepler)</option>
+                    <option value="galileo">Telescopio de Galileo</option>
+                </select>
+            </div>
+
+            <!-- SECCIÓN 1: FUENTE DE LUZ -->
+            <h3>1. Origen de los Rayos</h3>
+            <div class="control-group">
+                <label>Tipo de Fuente:</label>
+                <select id="src-type" onchange="markManual(); updateUI();">
+                    <option value="object">Objeto Real Cercano</option>
+                    <option value="inf-straight">Desde el Infinito (Rayos Paralelos)</option>
+                    <option value="inf-inclined">Desde el Infinito (Con Inclinación)</option>
+                </select>
+                
+                <div id="src-object-controls" style="margin-top: 10px;">
+                    <div class="grid-2">
+                        <div>
+                            <label>Posición s (cm):</label>
+                            <input type="number" id="src-x" value="-40" step="1" onchange="markManual(); updateSim();">
+                        </div>
+                        <div>
+                            <label>Altura y (cm):</label>
+                            <input type="number" id="src-y" value="8" step="0.5" onchange="markManual(); updateSim();">
+                        </div>
+                    </div>
+                </div>
+
+                <div id="src-inf-controls" style="margin-top: 10px; display: none;">
+                    <label>Ángulo de Inclinación α (grados):</label>
+                    <input type="number" id="src-angle" value="5" step="1" onchange="markManual(); updateSim();">
+                </div>
+            </div>
+
+            <!-- SECCIÓN 2: LENTES -->
+            <h3>2. Construcción del Sistema</h3>
+            <div id="lenses-list">
+                <!-- Se inyectan las lentes dinámicamente -->
+            </div>
+            <button class="btn-action" onclick="addLens()">+ Añadir Lente al Sistema</button>
+
+            <!-- SECCIÓN 3: CÁLCULOS -->
+            <h3>3. Centro de Cálculo Analítico</h3>
+            <div class="result-box" id="calc-center">
+                El sistema calculará automáticamente las posiciones de las imágenes y los aumentos laterales aplicando la norma DIN (la luz viaja de izquierda a derecha).
+            </div>
+        </div>
+
+        <div class="canvas-container">
+            <canvas id="canvas-optics" width="850" height="550" onmousemove="showCoords(event)" onmouseleave="clearCoords()"></canvas>
+            <div class="coord-display" id="coords">X: 0.0 cm | Y: 0.0 cm</div>
+        </div>
+    </div>
+
+    <script>
+        // --- COLORES EXCLUSIVOS PARA LENTES ---
+        const LENS_COLORS = ['#e74c3c', '#9b59b6', '#e67e22', '#1abc9c', '#34495e', '#d35400', '#27ae60'];
+        function getLensColor(index) { return LENS_COLORS[index % LENS_COLORS.length]; }
+
+        // --- ESTADO DEL SIMULADOR ---
+        let source = { type: 'object', x: -40, y: 8, angle: 5 };
+        let lenses = [
+            { id: 1, x: 0, f: 15, type: 'biconvex', color: getLensColor(0) },
+            { id: 2, x: 40, f: 20, type: 'planoconvex', color: getLensColor(1) }
+        ];
+        let lensCounter = 2;
+
+        const CANVAS_WIDTH = 850;
+        const CANVAS_HEIGHT = 550;
+        const SCALE_X = CANVAS_WIDTH / 160; 
+        const SCALE_Y = CANVAS_HEIGHT / 100; 
+        
+        const toX = val => CANVAS_WIDTH / 2 + val * SCALE_X;
+        const toY = val => CANVAS_HEIGHT / 2 - val * SCALE_Y;
+        const fromX = px => (px - CANVAS_WIDTH / 2) / SCALE_X;
+        const fromY = py => -(py - CANVAS_HEIGHT / 2) / SCALE_Y;
+
+        // --- GESTIÓN DE LA INTERFAZ Y PRESETS ---
+        function markManual() {
+            document.getElementById('preset-system').value = 'manual';
+        }
+
+        function loadPreset() {
+            const preset = document.getElementById('preset-system').value;
+            if (preset === 'manual') return;
+
+            lenses = [];
+            lensCounter = 0;
+
+            if (preset === 'lupa') {
+                source = { type: 'object', x: -10, y: 8, angle: 0 };
+                lenses.push({ id: ++lensCounter, x: 0, f: 15, type: 'biconvex', color: getLensColor(0) });
+            } else if (preset === 'microscopio') {
+                source = { type: 'object', x: -22, y: 4, angle: 0 };
+                lenses.push({ id: ++lensCounter, x: -10, f: 10, type: 'biconvex', color: getLensColor(0) }); // Objetivo
+                lenses.push({ id: ++lensCounter, x: 30, f: 15, type: 'biconvex', color: getLensColor(1) });  // Ocular
+            } else if (preset === 'astronomico') {
+                source = { type: 'inf-inclined', x: -50, y: 0, angle: 5 };
+                lenses.push({ id: ++lensCounter, x: -20, f: 30, type: 'biconvex', color: getLensColor(0) }); // Objetivo
+                lenses.push({ id: ++lensCounter, x: 20, f: 10, type: 'biconvex', color: getLensColor(1) });  // Ocular
+            } else if (preset === 'galileo') {
+                source = { type: 'inf-inclined', x: -50, y: 0, angle: 5 };
+                lenses.push({ id: ++lensCounter, x: -10, f: 30, type: 'biconvex', color: getLensColor(0) }); // Objetivo
+                lenses.push({ id: ++lensCounter, x: 10, f: -10, type: 'biconcave', color: getLensColor(1) }); // Ocular diver.
+            }
+
+            // Reflejar cambios en la UI
+            document.getElementById('src-type').value = source.type;
+            document.getElementById('src-x').value = source.x;
+            document.getElementById('src-y').value = source.y;
+            document.getElementById('src-angle').value = source.angle;
+            
+            updateUI();
+            renderLensesUI();
+            document.getElementById('preset-system').value = preset; // Restaurar el selector
+        }
+
+        function updateUI() {
+            const type = document.getElementById('src-type').value;
+            document.getElementById('src-object-controls').style.display = type === 'object' ? 'block' : 'none';
+            document.getElementById('src-inf-controls').style.display = type === 'inf-inclined' ? 'block' : 'none';
+            updateSim();
+        }
+
+        function addLens() {
+            markManual();
+            lensCounter++;
+            let lastX = lenses.length > 0 ? lenses[lenses.length - 1].x : 0;
+            lenses.push({ id: lensCounter, x: lastX + 30, f: -15, type: 'biconcave', color: getLensColor(lenses.length) });
+            renderLensesUI();
+            updateSim();
+        }
+
+        function removeLens(id) {
+            markManual();
+            lenses = lenses.filter(l => l.id !== id);
+            // Reasignar colores para mantener el orden cromático
+            lenses.forEach((l, i) => l.color = getLensColor(i));
+            renderLensesUI();
+            updateSim();
+        }
+
+        function onLensChange(id, field, value) {
+            markManual();
+            const lens = lenses.find(l => l.id === id);
+            if(lens) {
+                if (field === 'f' || field === 'x') lens[field] = parseFloat(value);
+                else lens[field] = value;
+                
+                if (field === 'type') {
+                    if (['biconvex', 'planoconvex'].includes(lens.type) && lens.f < 0) lens.f = Math.abs(lens.f);
+                    if (['biconcave', 'planoconcave'].includes(lens.type) && lens.f > 0) lens.f = -Math.abs(lens.f);
+                    document.getElementById(`lens-f-${id}`).value = lens.f;
+                }
+            }
+            updateSim();
+        }
+
+        function renderLensesUI() {
+            const list = document.getElementById('lenses-list');
+            list.innerHTML = '';
+            lenses.sort((a,b) => a.x - b.x); 
+
+            lenses.forEach((lens, index) => {
+                list.innerHTML += `
+                <div class="lens-card" style="border-left-color: ${lens.color}; border-top: 1px solid ${lens.color}44;">
+                    <h4 style="color: ${lens.color};">Lente L${index + 1}</h4>
+                    <button class="btn-action btn-remove" onclick="removeLens(${lens.id})">X</button>
+                    <div class="grid-2">
+                        <div>
+                            <label>Geometría:</label>
+                            <select onchange="onLensChange(${lens.id}, 'type', this.value)">
+                                <optgroup label="Convergentes">
+                                    <option value="biconvex" ${lens.type==='biconvex'?'selected':''}>Biconvexa</option>
+                                    <option value="planoconvex" ${lens.type==='planoconvex'?'selected':''}>Plano-Convexa</option>
+                                </optgroup>
+                                <optgroup label="Divergentes">
+                                    <option value="biconcave" ${lens.type==='biconcave'?'selected':''}>Bicóncava</option>
+                                    <option value="planoconcave" ${lens.type==='planoconcave'?'selected':''}>Plano-Cóncava</option>
+                                </optgroup>
+                            </select>
+                        </div>
+                        <div>
+                            <label>Posición X (cm):</label>
+                            <input type="number" value="${lens.x}" step="1" onchange="onLensChange(${lens.id}, 'x', this.value)">
+                        </div>
+                        <div style="grid-column: span 2;">
+                            <label>Distancia Focal f' (cm):</label>
+                            <input type="number" id="lens-f-${lens.id}" value="${lens.f}" step="1" onchange="onLensChange(${lens.id}, 'f', this.value)">
+                        </div>
+                    </div>
+                </div>`;
+            });
+        }
+
+        function showCoords(e) {
+            const rect = document.getElementById('canvas-optics').getBoundingClientRect();
+            const px = e.clientX - rect.left;
+            const py = e.clientY - rect.top;
+            document.getElementById('coords').innerText = `X: ${fromX(px).toFixed(1)} cm | Y: ${fromY(py).toFixed(1)} cm`;
+        }
+
+        function clearCoords() {
+            document.getElementById('coords').innerText = `X: 0.0 cm | Y: 0.0 cm`;
+        }
+
+        // --- CÁLCULO FÍSICO Y MOTOR DE RENDERIZADO ---
+        function drawArrow(ctx, fromX, fromY, toX, toY, color, dotted=false, lineWidth=2, headlen=12) {
+            const dx = toX - fromX;
+            const dy = toY - fromY;
+            const angle = Math.atan2(dy, dx);
+            
+            ctx.beginPath();
+            if(dotted) ctx.setLineDash([5, 5]);
+            else ctx.setLineDash([]);
+            ctx.moveTo(fromX, fromY);
+            ctx.lineTo(toX, toY);
+            ctx.strokeStyle = color;
+            ctx.lineWidth = lineWidth;
+            ctx.stroke();
+            ctx.setLineDash([]);
+            
+            if (headlen > 0) {
+                ctx.beginPath();
+                ctx.moveTo(toX, toY);
+                ctx.lineTo(toX - headlen * Math.cos(angle - Math.PI / 6), toY - headlen * Math.sin(angle - Math.PI / 6));
+                ctx.lineTo(toX - headlen * Math.cos(angle + Math.PI / 6), toY - headlen * Math.sin(angle + Math.PI / 6));
+                ctx.lineTo(toX, toY);
+                ctx.fillStyle = color;
+                ctx.fill();
+            }
+        }
+
+        function drawLensGraphic(ctx, lens) {
+            const w = 8; // semiancho
+            const h = CANVAS_HEIGHT / 2 - 15; // Altura máxima (aprox 260px) para cubrir la pantalla
+            const px = toX(lens.x);
+            const py0 = toY(0);
+            
+            ctx.beginPath();
+            ctx.strokeStyle = lens.color;
+            ctx.lineWidth = 2;
+            ctx.fillStyle = lens.color + '25'; // Transparencia usando color hexadecimal
+
+            if (lens.type === 'biconvex') {
+                ctx.moveTo(px, py0 + h);
+                ctx.quadraticCurveTo(px + w*3, py0, px, py0 - h);
+                ctx.quadraticCurveTo(px - w*3, py0, px, py0 + h);
+            } else if (lens.type === 'planoconvex') {
+                ctx.moveTo(px - w, py0 + h);
+                ctx.lineTo(px - w, py0 - h);
+                ctx.quadraticCurveTo(px + w*4, py0, px - w, py0 + h);
+            } else if (lens.type === 'biconcave') {
+                ctx.moveTo(px - w*2, py0 + h);
+                ctx.lineTo(px + w*2, py0 + h);
+                ctx.quadraticCurveTo(px, py0, px + w*2, py0 - h);
+                ctx.lineTo(px - w*2, py0 - h);
+                ctx.quadraticCurveTo(px, py0, px - w*2, py0 + h);
+            } else if (lens.type === 'planoconcave') {
+                ctx.moveTo(px - w, py0 + h);
+                ctx.lineTo(px + w*2, py0 + h);
+                ctx.quadraticCurveTo(px, py0, px + w*2, py0 - h);
+                ctx.lineTo(px - w, py0 - h);
+                ctx.lineTo(px - w, py0 + h);
+            }
+            
+            ctx.fill();
+            ctx.stroke();
+
+            // Dibujar Focos (F y F') con el color de la lente
+            ctx.fillStyle = lens.color; 
+            ctx.font = "bold 14px Arial";
+            let f = -lens.f; 
+            
+            ctx.beginPath(); ctx.arc(toX(lens.x + lens.f), py0, 5, 0, 2*Math.PI); ctx.fill();
+            ctx.fillText("F'", toX(lens.x + lens.f)-6, py0-8);
+            
+            ctx.beginPath(); ctx.arc(toX(lens.x + f), py0, 5, 0, 2*Math.PI); ctx.fill();
+            ctx.fillText("F", toX(lens.x + f)-5, py0-8);
+        }
+
+        function traceRay(startX, startY, initialSlope, systemLenses) {
+            let path = [{x: startX, y: startY}];
+            let currentX = startX;
+            let currentY = startY;
+            let m = initialSlope;
+
+            for (let i = 0; i < systemLenses.length; i++) {
+                let lens = systemLenses[i];
+                if (lens.x <= currentX + 0.001) continue; 
+
+                let d = lens.x - currentX;
+                currentX = lens.x;
+                currentY = currentY + d * m;
+                path.push({x: currentX, y: currentY});
+
+                m = m - (currentY / lens.f);
+            }
+            let endX = 150; 
+            let dEnd = endX - currentX;
+            path.push({x: endX, y: currentY + dEnd * m});
+            return path;
+        }
+
+        function drawRayPath(ctx, path, color) {
+            ctx.beginPath();
+            ctx.moveTo(toX(path[0].x), toY(path[0].y));
+            for(let i=1; i<path.length; i++) {
+                ctx.lineTo(toX(path[i].x), toY(path[i].y));
+            }
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 1.5;
+            ctx.stroke();
+            
+            let p1 = path[path.length-2];
+            let p2 = path[path.length-1];
+            if (p2.x > p1.x) {
+                let midX = p1.x + (p2.x - p1.x) * 0.3;
+                let midY = p1.y + (p2.y - p1.y) * 0.3;
+                drawArrow(ctx, toX(p1.x), toY(p1.y), toX(midX), toY(midY), color, false, 1.5, 8);
+            }
+        }
+
+        function updateSim() {
+            source.type = document.getElementById('src-type').value;
+            source.x = parseFloat(document.getElementById('src-x').value);
+            source.y = parseFloat(document.getElementById('src-y').value);
+            source.angle = parseFloat(document.getElementById('src-angle').value);
+
+            lenses.sort((a,b) => a.x - b.x); 
+
+            const canvas = document.getElementById('canvas-optics');
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // 1. DIBUJAR EJE ÓPTICO
+            ctx.beginPath();
+            ctx.moveTo(0, toY(0));
+            ctx.lineTo(canvas.width, toY(0));
+            ctx.strokeStyle = '#95a5a6';
+            ctx.lineWidth = 1.5;
+            ctx.setLineDash([8, 4]);
+            ctx.stroke();
+            ctx.setLineDash([]);
+
+            // 2. DIBUJAR LENTES
+            lenses.forEach(l => drawLensGraphic(ctx, l));
+
+            // 3. CENTRO DE CÁLCULO (Física DIN Analítica)
+            let calcHTML = "";
+            let current_x = source.type === 'object' ? source.x : -Infinity;
+            let current_y = source.type === 'object' ? source.y : (source.type === 'inf-inclined' ? 0 : NaN); 
+            let global_AL = 1.0;
+            let images = [];
+
+            for (let i = 0; i < lenses.length; i++) {
+                let lens = lenses[i];
+                let s_in, s_out, y_out, AL_i;
+
+                calcHTML += `<div style="border-left: 3px solid ${lens.color}; padding-left: 8px; margin-bottom: 8px;">`;
+                calcHTML += `<b style="color:${lens.color};">A través de L${i+1} (x = ${lens.x} cm, f' = ${lens.f} cm):</b><br>`;
+
+                if (current_x === -Infinity) {
+                    s_in = -Infinity;
+                    s_out = lens.f; 
+                    
+                    if (source.type === 'inf-straight') {
+                        y_out = 0;
+                        calcHTML += `Rayos paralelos al eje óptico.<br>`;
+                    } else { 
+                        let angRad = source.angle * Math.PI / 180;
+                        y_out = lens.f * Math.tan(-angRad); 
+                        calcHTML += `Rayos con inclinación α = ${source.angle}º.<br>`;
+                    }
+                    AL_i = NaN; 
+                    calcHTML += `&rarr; s'<sub>${i+1}</sub> = <b>${s_out.toFixed(2)} cm</b> (Imagen en F')<br>`;
+                    calcHTML += `&rarr; y'<sub>${i+1}</sub> = <b>${y_out.toFixed(2)} cm</b><br>`;
+                } else {
+                    s_in = current_x - lens.x; 
+                    calcHTML += `Objeto relativo a L${i+1}: s<sub>${i+1}</sub> = ${s_in.toFixed(2)} cm.<br>`;
+                    
+                    if (Math.abs(s_in + lens.f) < 0.001) {
+                        s_out = Infinity;
+                        y_out = Infinity;
+                        AL_i = Infinity;
+                        calcHTML += `&rarr; La imagen se forma en el <b>Infinito</b> (rayos paralelos).<br>`;
+                        current_x = Infinity;
+                    } else {
+                        s_out = (s_in * lens.f) / (s_in + lens.f);
+                        AL_i = s_out / s_in;
+                        y_out = current_y * AL_i;
+                        global_AL *= AL_i;
+                        
+                        calcHTML += `&rarr; s'<sub>${i+1}</sub> = <b>${s_out.toFixed(2)} cm</b><br>`;
+                        calcHTML += `&rarr; Aumento Lateral β' = ${AL_i.toFixed(2)}x<br>`;
+                        calcHTML += `&rarr; y'<sub>${i+1}</sub> = <b>${y_out.toFixed(2)} cm</b><br>`;
+                    }
+                }
+
+                if (s_out !== Infinity) {
+                    current_x = lens.x + s_out; 
+                    current_y = y_out;
+                    images.push({ x: current_x, y: current_y, virtual: s_out < 0 });
+                } else {
+                    current_x = Infinity;
+                }
+                calcHTML += `</div>`;
+            }
+
+            if (lenses.length > 0 && current_x !== Infinity) {
+                let nature = images[images.length-1].virtual ? "Virtual" : "Real";
+                let orientation = current_y * source.y < 0 ? "Invertida" : "Derecha";
+                calcHTML += `<div style="color: #8e44ad; font-weight: bold; margin-top: 10px;">
+                    RESULTADO FINAL ABSOLUTO:<br>
+                    Posición X = ${current_x.toFixed(2)} cm<br>
+                    Altura Y = ${current_y.toFixed(2)} cm<br>
+                    Naturaleza: ${nature}, ${orientation}
+                </div>`;
+            } else if (lenses.length === 0) {
+                calcHTML = "No hay lentes en el sistema.";
+            }
+            document.getElementById('calc-center').innerHTML = calcHTML;
+
+            // 4. TRAZADO DE RAYOS VISUAL (Canvas)
+            let rayColor = 'rgba(230, 126, 34, 0.7)';
+            
+            if (source.type === 'object') {
+                drawArrow(ctx, toX(source.x), toY(0), toX(source.x), toY(source.y), '#27ae60', false, 3, 12);
+                
+                if (lenses.length > 0) {
+                    let L1 = lenses[0];
+                    let m1 = 0; 
+                    let m2 = -source.y / (L1.x - source.x); 
+                    
+                    let path1 = traceRay(source.x, source.y, m1, lenses);
+                    let path2 = traceRay(source.x, source.y, m2, lenses);
+                    
+                    drawRayPath(ctx, path1, rayColor);
+                    drawRayPath(ctx, path2, rayColor);
+
+                    let F_front = L1.x - L1.f; 
+                    if (source.x !== F_front) {
+                        let m3 = source.y / (F_front - source.x);
+                        let path3 = traceRay(source.x, source.y, m3, lenses);
+                        drawRayPath(ctx, path3, rayColor);
+                    }
+                }
+            } else if (source.type === 'inf-straight') {
+                let ys = [30, 15, -15, -30];
+                ys.forEach(y => {
+                    let path = traceRay(-100, y, 0, lenses);
+                    drawRayPath(ctx, path, rayColor);
+                });
+            } else if (source.type === 'inf-inclined') {
+                let angRad = source.angle * Math.PI / 180;
+                let m = Math.tan(angRad);
+                let ys = [40, 20, 0, -20, -40]; 
+                ys.forEach(y => {
+                    let path = traceRay(-100, y, m, lenses);
+                    drawRayPath(ctx, path, rayColor);
+                });
+            }
+
+            // 5. DIBUJAR IMÁGENES
+            images.forEach((img, idx) => {
+                let isFinal = idx === images.length - 1;
+                let color = isFinal ? '#8e44ad' : '#7f8c8d';
+                drawArrow(ctx, toX(img.x), toY(0), toX(img.x), toY(img.y), color, img.virtual, isFinal ? 4 : 2, 10);
+                
+                ctx.fillStyle = color;
+                ctx.font = "bold 13px Arial";
+                ctx.fillText(`I${idx+1}`, toX(img.x) + 5, toY(img.y) + (img.y > 0 ? -5 : 15));
+            });
+        }
+
+        // Inicialización
+        renderLensesUI();
+        updateUI();
+    </script>
+</body>
+</html>
